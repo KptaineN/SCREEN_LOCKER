@@ -1,214 +1,314 @@
-🌌 THE BLACK HOLE / ULTIMATE STARFIELD LOCKER
-Linux • X11 • Terminal • Low-Level Input Control
-📖 Introduction
+<div align="center">
 
-The Black Hole Locker (alias Ultimate Starfield Locker) est un projet expérimental écrit en C, né d’un défi précis :
+# 🌌 THE BLACK HOLE LOCKER
 
-Transformer une simple animation Starfield en un écran de verrouillage quasi infranchissable,
-capable de neutraliser les vecteurs d’évasion classiques
-(Ctrl+C, Alt+F4, Alt+Tab, focus loss)
-sans droits administrateur (no sudo).
+### *Ultimate Starfield Screen Locker*
+
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+![C](https://img.shields.io/badge/C-00599C?style=for-the-badge&logo=c&logoColor=white)
+![X11](https://img.shields.io/badge/X11-F28D1A?style=for-the-badge&logo=x.org&logoColor=white)
+
+**Linux • X11 • Terminal • Low-Level Input Control**
+
+<br/>
+
+*Transformer une simple animation Starfield en un écran de verrouillage quasi infranchissable*
+
+[Installation](#-installation) •
+[Utilisation](#-utilisation) •
+[Documentation X11](X11.md)
+
+</div>
+
+---
+
+## 📖 Introduction
+
+**The Black Hole Locker** (alias *Ultimate Starfield Locker*) est un projet expérimental écrit en **C**, né d'un défi précis :
+
+> 🎯 Créer un écran de verrouillage capable de neutraliser les vecteurs d'évasion classiques  
+> `Ctrl+C` · `Alt+F4` · `Alt+Tab` · *focus loss*  
+> **sans droits administrateur** (no sudo)
 
 Le programme combine :
 
-un rendu visuel immersif en terminal (ANSI / Unicode),
+| Composant | Description |
+|:---------:|-------------|
+| 🎨 **Rendu visuel** | Animation immersive en terminal (ANSI / Unicode) |
+| ⌨️ **Capture clavier** | Interception bas niveau via X11 |
+| 🔐 **Déverrouillage** | Logique par séquence secrète |
 
-une capture clavier bas niveau via X11,
+> [!WARNING]
+> Ce projet n'est **pas** un vrai lockscreen sécurisé système, mais un **proof-of-concept avancé** montrant jusqu'où on peut aller sans privilèges root.
 
-et une logique de déverrouillage par séquence secrète.
+---
 
-Ce projet n’est pas un vrai lockscreen sécurisé système,
-mais un proof-of-concept avancé montrant jusqu’où on peut aller sans privilèges root, uniquement avec X11 et le terminal.
+## 🛠️ L'Évolution — Problèmes & Solutions
 
-🛠️ L’Évolution — Problèmes rencontrés & ruses employées
-1️⃣ Le faux plein écran : l’illusion contrôlée
+### 1️⃣ Le faux plein écran : l'illusion contrôlée
 
-Problème
+<table>
+<tr>
+<td width="50%">
+
+**❌ Problème**
+
 En C standard, il est impossible de forcer une application terminal en plein écran natif.
 
-Solution
+</td>
+<td width="50%">
 
-Activation du buffer alternatif ANSI :
+**✅ Solution**
 
-\033[?1049h
+- Buffer alternatif ANSI : `\033[?1049h`
+- Masquage du curseur
+- xterm brut sans décorations
 
+</td>
+</tr>
+</table>
 
-Masquage du curseur et nettoyage visuel.
+```bash
+xterm -xrm 'xterm.overrideRedirect: true'
+```
 
-Lancement dans un xterm brut, sans décorations.
+> 💡 **Ruse** : Le Window Manager n'ajoute ni bordure, ni barre de titre, ni gestion de focus.  
+> ➡️ **Résultat** : une interface *stealth*, au-dessus de tout.
 
-Ruse
+---
 
-Utilisation de xterm avec :
+### 2️⃣ Le combat contre le Window Manager
 
--xrm 'xterm.overrideRedirect: true'
+<table>
+<tr>
+<td width="50%">
 
+**❌ Problème**
 
-→ le Window Manager n’ajoute ni bordure, ni barre de titre, ni gestion de focus.
+GNOME / KDE interceptent les raccourcis système (`Alt+F4`, `Alt+Tab`) avant qu'ils n'atteignent le programme.
 
-➡️ Résultat : une interface stealth, au-dessus de tout.
+</td>
+<td width="50%">
 
-2️⃣ Le combat contre le Window Manager (Alt+F4 / Alt+Tab)
+**✅ Solution ultime**
 
-Problème
-GNOME / KDE interceptent les raccourcis système avant qu’ils n’atteignent ton programme.
+```c
+XGrabKeyboard(dpy, root, False, 
+              GrabModeAsync, GrabModeAsync, 
+              CurrentTime);
+```
 
-Tentative échouée
+</td>
+</tr>
+</table>
 
-Ignorer les signaux POSIX (SIGINT, SIGTERM) n’est pas suffisant :
+> ➡️ Le serveur X11 redirige **tout** le flux clavier matériel vers ton programme.  
+> ➡️ Le Window Manager devient **sourd**.
 
-le WM tue la fenêtre, pas juste le process.
+---
 
-Solution ultime : X11 Keyboard Grab
+### 3️⃣ Le bug du "Clavier Muet"
 
-XGrabKeyboard(dpy, root, False, GrabModeAsync, GrabModeAsync, CurrentTime);
+<table>
+<tr>
+<td width="50%">
 
+**❌ Problème**
 
-➡️ Le serveur X11 redirige tout le flux clavier matériel vers ton programme.
-➡️ Le Window Manager devient sourd.
-
-3️⃣ Le bug du “Clavier Muet”
-
-Problème
 Une fois le clavier capturé par X11 :
+- `read()`, `stdin`, `termios` → inutilisables
+- La séquence secrète ne fonctionne plus
 
-read(), stdin, termios → inutilisables
+</td>
+<td width="50%">
 
-la séquence secrète (m puis p) ne fonctionne plus
+**✅ Solution**
 
-Ruse
-Passage complet à la boucle d’événements X11 :
-
+```c
 while (XPending(dpy)) {
     XNextEvent(dpy, &ev);
     if (ev.type == KeyPress) {
         KeySym keysym = XLookupKeysym(&ev.xkey, 0);
     }
 }
+```
 
+</td>
+</tr>
+</table>
 
-➡️ On lit directement les signaux matériels du clavier,
-sans passer par le terminal.
+> ➡️ On lit directement les signaux matériels du clavier, sans passer par le terminal.
 
-🧬 Anatomie du Code — Les 4 Piliers
-A. 🛡️ La couche X11 — La Sécurité
+---
+
+## 🧬 Anatomie du Code — Les 4 Piliers
+
+<details>
+<summary><b>🛡️ A. La couche X11 — La Sécurité</b></summary>
+
+<br/>
+
+```c
 Display *dpy = XOpenDisplay(NULL);
 XGrabKeyboard(dpy, root, False, GrabModeAsync, GrabModeAsync, CurrentTime);
+```
 
+- ✅ Capture exclusive du clavier
+- ✅ Neutralisation des touches système (`Alt`, `Super`, `F4`…)
+- ✅ Lecture directe des événements `KeyPress`
 
-Capture exclusive du clavier
+</details>
 
-Neutralisation des touches système (Alt, Super, F4…)
+<details>
+<summary><b>🌠 B. Le moteur physique — L'Animation</b></summary>
 
-Lecture directe des événements KeyPress
+<br/>
 
-B. 🌠 Le moteur physique — L’Animation
+Le Starfield repose sur une **projection 3D → 2D** réelle :
 
-Le Starfield repose sur une projection 3D → 2D réelle :
-
+```c
 x_screen = (x_3D / z_3D) * focal + center_x
 y_screen = (y_3D / z_3D) * focal + center_y
+```
 
+| Effet | Technique |
+|-------|-----------|
+| Profondeur | `z` diminue → l'étoile "s'approche" |
+| Perspective | Division naturelle |
+| Luminosité | Étoiles lointaines → sombres / proches → brillantes |
 
-z diminue → l’étoile “s’approche”
+**Caractères Unicode** : `█ ▓ ▒ ░ ·`
 
-perspective naturelle par division
+</details>
 
-illusion de vitesse et de profondeur
+<details>
+<summary><b>🔐 C. La boucle d'écoute — Le Secret</b></summary>
 
-Ruse visuelle
+<br/>
 
-Caractères Unicode :
-
-█ ▓ ▒ ░ ·
-
-
-Couleurs ANSI :
-
-étoiles lointaines → sombres
-
-étoiles proches → brillantes
-
-C. 🔐 La boucle d’écoute — Le Secret
+```c
 if (c == 'm') last_key = 'm';
 else if (last_key == 'm' && c == 'p') locked = 0;
 else last_key = 0;
+```
 
+- 🔹 Détection **séquentielle**, pas instantanée
+- 🔹 Toute erreur reset la progression
+- 🔹 Le programme reste bloqué tant que la combinaison exacte n'est pas entrée
 
-Détection séquentielle, pas instantanée
+</details>
 
-Toute erreur reset la progression
+<details>
+<summary><b>🧹 D. Le nettoyage — La Restauration</b></summary>
 
-Le programme reste bloqué tant que la combinaison exacte n’est pas entrée
+<br/>
 
-D. 🧹 Le nettoyage — La Restauration
+```c
 XUngrabKeyboard(dpy, CurrentTime);
 printf("\033[?1049l\033[?25h");
+```
 
+> [!CAUTION]
+> **Partie critique**
+> - Rend le clavier au système
+> - Restaure le terminal normal
+> - Évite de "casser" la session utilisateur
 
-⚠️ Partie critique
+</details>
 
-Rend le clavier au système
+---
 
-Restaure le terminal normal
+## 🚀 Installation
 
-Évite de “casser” la session utilisateur
+### Prérequis
 
-🚀 Commandes essentielles
-Action	Commande
-Installation	sudo apt install libx11-dev xterm x11-utils
-Compilation	gcc -O3 ultimate_locker.c -o locker -lX11
-Lancement	xterm -xrm 'xterm.overrideRedirect: true' -fullscreen -e ./locker
+```bash
+sudo apt install libx11-dev xterm x11-utils
+```
 
-⚠️ Important :
--lX11 doit être à la fin (ordre du linker).
+### Compilation
 
-⚠️ Leçons apprises
+```bash
+gcc -O3 ultimate_locker_x.c -o locker -lX11
+```
 
-🔑 Le terminal n’est qu’une surcouche
-→ pour bloquer vraiment, il faut parler au serveur graphique
+> [!IMPORTANT]
+> `-lX11` doit être **à la fin** (ordre du linker).
 
-🧠 X11 > stdin pour la capture clavier
+---
 
-🧨 Toujours prévoir une porte de secours
+## 🎮 Utilisation
 
-Ctrl + Alt + F3 (TTY)
+### Lancement
 
-pkill locker
+```bash
+xterm -xrm 'xterm.overrideRedirect: true' -fullscreen -e ./locker
+```
 
-🧭 Limitations & Disclaimer
+Ou utilisez le script fourni :
 
-❌ Pas un lockscreen système sécurisé
+```bash
+./ultimate_locker_x.sh
+```
 
-❌ Dépend fortement de X11 (Wayland = comportement variable)
+### 🔓 Déverrouillage
 
-✔️ Excellent exercice bas niveau, architecture, événements, input handling
+Tapez la séquence secrète : <kbd>M</kbd> puis <kbd>P</kbd>
 
-🧪 Pistes d’amélioration
+### 🆘 Sortie d'urgence
 
-Séquence configurable (argv)
+| Méthode | Commande |
+|:-------:|----------|
+| 🖥️ TTY | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>F3</kbd> |
+| ☠️ Kill | `pkill locker` |
 
-Hash + mot de passe
+---
 
-Timeout / idle detection
+## ⚠️ Leçons apprises
 
-Gestion propre de tous les signaux
+| 🔑 Concept | Description |
+|:----------:|-------------|
+| **Terminal = surcouche** | Pour bloquer vraiment, il faut parler au serveur graphique |
+| **X11 > stdin** | Pour la capture clavier bas niveau |
+| **Porte de secours** | Toujours prévoir une échappatoire |
 
-Mode “panic exit” caché
+---
 
-Motion blur / traînées d’étoiles
+## 🧭 Limitations
 
-🏁 Conclusion
+| Status | Description |
+|:------:|-------------|
+| ❌ | Pas un lockscreen système sécurisé |
+| ❌ | Dépend fortement de X11 (Wayland = comportement variable) |
+| ✅ | Excellent exercice bas niveau, architecture, événements, input handling |
 
-Ce projet démontre qu’avec :
+---
 
-du C pur
+## 🧪 Pistes d'amélioration
 
-un terminal
+- [ ] Séquence configurable (`argv`)
+- [ ] Hash + mot de passe
+- [ ] Timeout / idle detection
+- [ ] Gestion propre de tous les signaux
+- [ ] Mode "panic exit" caché
+- [ ] Motion blur / traînées d'étoiles
 
-et une compréhension fine de X11
+---
 
-on peut détourner des mécanismes bas niveau pour créer une illusion de contrôle total, sans privilèges élevés.
+## 🏁 Conclusion
 
-Le système pense toujours être maître.
-Mais parfois… on peut lui faire croire le contraire.
+<div align="center">
+
+Ce projet démontre qu'avec du **C pur**, un **terminal** et une compréhension fine de **X11**,  
+on peut détourner des mécanismes bas niveau pour créer une illusion de contrôle total.
+
+---
+
+*Le système pense toujours être maître.*  
+*Mais parfois… on peut lui faire croire le contraire.* 🌌
+
+<br/>
+
+📚 **Pour en savoir plus sur X11** → **[Documentation X11](X11.md)**
+
+</div>
