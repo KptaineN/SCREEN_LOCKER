@@ -1,6 +1,6 @@
 #!/bin/bash
 # On compile
-gcc -O3 ultimate_locker_x.c -o ultimate_locker_x -lX11
+# gcc -O3 ultimate_locker_x.c -o ultimate_locker_x -lX11
 
 # On vérifie xdpyinfo
 WIDTH=$(xdpyinfo | grep dimensions | awk '{print $2}' | cut -d 'x' -f1)
