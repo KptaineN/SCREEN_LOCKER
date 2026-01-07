@@ -259,8 +259,10 @@ Tapez la séquence secrète : <kbd>M</kbd> puis <kbd>P</kbd>
 
 | Méthode | Commande |
 |:-------:|----------|
-| 🖥️ TTY | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>F3</kbd> |
-| ☠️ Kill | `pkill locker` |
+| 🖥️ TTY     | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>F3</kbd> |
+| ☠️ Kill    | `pkill locker` |
+| 🪴 reboot  | Ctrl + alt + backspace -> restart sessions |
+| 🌱 key_boot| [ Alt + printscreen ] + 'e'r'i'u'b' |
 
 ---
 
